@@ -37,3 +37,24 @@ module "dynamodb" {
     Component = "database"
   }
 }
+
+# ── Módulo Lambda Summarizer ─────────────────────────────────────
+module "lambda_summarizer" {
+  source = "./modules/lambda"
+
+  function_name = "${var.project_name}-${var.environment}-summarizer"
+  zip_path      = "${path.module}/../backend/summarizer/summarizer.zip"
+  timeout       = 60
+  memory_size   = 256
+
+  dynamodb_table_arn = module.dynamodb.table_arn
+
+  environment_variables = {
+    DYNAMODB_TABLE  = module.dynamodb.table_name
+    AWS_REGION_NAME = var.aws_region
+  }
+
+  tags = {
+    Component = "compute"
+  }
+}

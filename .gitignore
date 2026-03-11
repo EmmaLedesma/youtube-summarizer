@@ -32,3 +32,9 @@ Thumbs.db
 
 # VS Code
 .vscode/settings.json
+
+# Test files locales (pueden contener credenciales)
+backend/**/test_*.py
+backend/**/test_*.json
+terraform/payload.json
+terraform/response.json
