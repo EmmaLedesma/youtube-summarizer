@@ -1,6 +1,6 @@
 """
-Lambda handler — recibe transcript desde el frontend y llama a Bedrock.
-El frontend es responsable de extraer el transcript (evita bloqueo de IP).
+Lambda handler — recibe videoId, obtiene transcript via Supadata y llama a Bedrock.
+La extracción del transcript se hace server-side para evitar bloqueos de IP y CORS.
 """
 
 import json
@@ -10,6 +10,7 @@ from datetime import datetime, timezone, timedelta
 import boto3
 
 from bedrock_client import summarize_transcript
+from transcript import get_transcript
 
 DYNAMODB_TABLE = os.environ.get("DYNAMODB_TABLE", "yt-summarizer-dev-summaries")
 AWS_REGION = os.environ.get("AWS_REGION_NAME", "us-east-1")
@@ -61,21 +62,14 @@ def lambda_handler(event, context):
     try:
         body = json.loads(event.get("body", "{}"))
         video_id = body.get("videoId", "").strip()
-        transcript_text = body.get("transcriptText", "").strip()
-        language = body.get("language", "English")
 
         if not video_id:
             return build_response(400, {
                 "error": "videoId requerido",
+                "message": "Enviá el videoId en el body del request."
             })
 
-        if not transcript_text:
-            return build_response(400, {
-                "error": "transcriptText requerido",
-                "message": "El frontend debe enviar el transcript extraído."
-            })
-
-        # Verificar cache en DynamoDB
+        # ── Verificar caché en DynamoDB ──────────────────────
         table = dynamodb.Table(DYNAMODB_TABLE)
         existing = table.query(
             KeyConditionExpression="videoId = :vid",
@@ -93,10 +87,15 @@ def lambda_handler(event, context):
                 "summary": cached["summary"],
             })
 
-        # Llamar a Bedrock
+        # ── Obtener transcript via Supadata ──────────────────
+        transcript = get_transcript(video_id)
+        transcript_text = transcript["text"]
+        language = transcript["language"]
+
+        # ── Llamar a Bedrock ─────────────────────────────────
         summary = summarize_transcript(transcript_text, language)
 
-        # Guardar en DynamoDB
+        # ── Guardar en DynamoDB ──────────────────────────────
         created_at = save_to_dynamodb(video_id, summary, language)
 
         return build_response(200, {
@@ -113,8 +112,16 @@ def lambda_handler(event, context):
         })
 
     except ValueError as e:
+        # Subtítulos no disponibles, video privado, etc.
         return build_response(422, {
             "error": "Contenido no procesable",
+            "message": str(e)
+        })
+
+    except RuntimeError as e:
+        # Errores de conectividad con Supadata o Bedrock
+        return build_response(502, {
+            "error": "Error de servicio externo",
             "message": str(e)
         })
 
