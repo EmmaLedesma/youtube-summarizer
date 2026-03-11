@@ -11,9 +11,8 @@ MODEL_ID = "us.anthropic.claude-3-5-haiku-20241022-v1:0"
 
 
 def get_bedrock_client(region: str = "us-east-1"):
-    """Crea cliente de Bedrock Runtime."""
-    session = boto3.Session(profile_name="yt-summarizer")
-    return session.client("bedrock-runtime", region_name=region)
+    """Crea cliente de Bedrock Runtime usando el rol IAM de la Lambda."""
+    return boto3.client("bedrock-runtime", region_name=region)
 
 
 def build_prompt(transcript_text: str, language: str) -> str:

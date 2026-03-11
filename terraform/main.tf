@@ -58,3 +58,16 @@ module "lambda_summarizer" {
     Component = "compute"
   }
 }
+
+# ── Módulo API Gateway ───────────────────────────────────────────
+module "api_gateway" {
+  source = "./modules/api-gateway"
+
+  api_name             = "${var.project_name}-${var.environment}-api"
+  lambda_invoke_arn    = module.lambda_summarizer.invoke_arn
+  lambda_function_name = module.lambda_summarizer.function_name
+
+  tags = {
+    Component = "api"
+  }
+}

@@ -17,3 +17,8 @@ output "lambda_summarizer_invoke_arn" {
   description = "Summarizer Lambda invoke ARN"
   value       = module.lambda_summarizer.invoke_arn
 }
+
+output "api_url" {
+  description = "API Gateway endpoint URL"
+  value       = module.api_gateway.api_url
+}
