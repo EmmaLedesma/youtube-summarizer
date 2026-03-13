@@ -8,6 +8,7 @@ GitHub: https://github.com/EmmaLedesma/youtube-summarizer
 [![Terraform](https://img.shields.io/badge/terraform-1.14+-purple)](https://terraform.io)
 [![Python](https://img.shields.io/badge/python-3.12-blue)](https://python.org)
 [![Bedrock](https://img.shields.io/badge/AWS_Bedrock-Claude_3.5_Haiku-teal)](https://aws.amazon.com/bedrock/)
+[![Demo](https://img.shields.io/badge/demo-live-brightgreen)](https://d21n43yg7hlxxz.cloudfront.net)
 
 ---
 
@@ -294,6 +295,7 @@ GitHub: https://github.com/EmmaLedesma/youtube-summarizer
 [![Terraform](https://img.shields.io/badge/terraform-1.14+-purple)](https://terraform.io)
 [![Python](https://img.shields.io/badge/python-3.12-blue)](https://python.org)
 [![Bedrock](https://img.shields.io/badge/AWS_Bedrock-Claude_3.5_Haiku-teal)](https://aws.amazon.com/bedrock/)
+[![Demo](https://img.shields.io/badge/demo-live-brightgreen)](https://d21n43yg7hlxxz.cloudfront.net)
 
 ---
 
