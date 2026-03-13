@@ -1,0 +1,66 @@
+# ═══════════════════════════════════════════════════════════
+# YT Summarizer — Deploy Backend (Lambda)
+# .github/workflows/deploy-backend.yml
+#
+# Se ejecuta en cada push a master que modifique el backend.
+# Buildea el ZIP e invoca update-function-code en Lambda.
+# ═══════════════════════════════════════════════════════════
+
+name: Deploy Backend
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'backend/**'
+
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Build + Deploy Lambda
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        working-directory: backend/summarizer
+        run: |
+          pip install -r requirements.txt -t package/
+          cp *.py package/
+
+      - name: Create ZIP
+        working-directory: backend/summarizer
+        run: |
+          cd package
+          zip -r ../summarizer.zip .
+          cd ..
+          echo "ZIP size: $(du -sh summarizer.zip | cut -f1)"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            us-east-1
+
+      - name: Deploy to Lambda
+        working-directory: backend/summarizer
+        run: |
+          aws lambda update-function-code \
+            --function-name yt-summarizer-dev-summarizer \
+            --zip-file fileb://summarizer.zip
+
+      - name: Wait for Lambda update
+        run: |
+          aws lambda wait function-updated \
+            --function-name yt-summarizer-dev-summarizer
+          echo "Lambda deployed successfully"
