@@ -8,6 +8,8 @@ GitHub: https://github.com/EmmaLedesma/youtube-summarizer
 [![Terraform](https://img.shields.io/badge/terraform-1.14+-purple)](https://terraform.io)
 [![Python](https://img.shields.io/badge/python-3.12-blue)](https://python.org)
 [![Bedrock](https://img.shields.io/badge/AWS_Bedrock-Claude_3.5_Haiku-teal)](https://aws.amazon.com/bedrock/)
+[![CI Frontend](https://github.com/EmmaLedesma/youtube-summarizer/actions/workflows/deploy-frontend.yml/badge.svg)](https://github.com/EmmaLedesma/youtube-summarizer/actions/workflows/deploy-frontend.yml)
+[![CI Backend](https://github.com/EmmaLedesma/youtube-summarizer/actions/workflows/deploy-backend.yml/badge.svg)](https://github.com/EmmaLedesma/youtube-summarizer/actions/workflows/deploy-backend.yml)
 [![Demo](https://img.shields.io/badge/demo-live-brightgreen)](https://d21n43yg7hlxxz.cloudfront.net)
 
 ---
@@ -44,8 +46,9 @@ Browser
                     └─ DynamoDB.putItem() → guarda resultado
                     └─ response → Browser
 
-Frontend estático: S3 + CloudFront (OAC, HTTPS, SPA fallback)
+Frontend estático: S3 + CloudFront (OAC, HTTPS)
 Infraestructura: 100% Terraform (módulos locales)
+CI/CD: GitHub Actions (deploy automático en push a master)
 ```
 
 ### Flujo Detallado
@@ -81,9 +84,11 @@ Infraestructura: 100% Terraform (módulos locales)
 | S3 Bucket (frontend) | `yt-summarizer-dev-frontend` | storage |
 | CloudFront Distribution | `E16INCGHSKTQTT` | storage |
 | CloudFront OAC | `yt-summarizer-dev-oac` | storage |
+| CloudWatch Dashboard | `yt-summarizer-dev` | monitoring |
+| CloudWatch Alarms (3) | lambda-errors, lambda-duration, api-5xx | monitoring |
 | Secrets Manager | `yt-summarizer/dev/supadata-key` | — |
 
-**Total: 9 recursos principales en AWS**
+**Total: 11 recursos principales en AWS**
 
 ---
 
@@ -95,6 +100,8 @@ Infraestructura: 100% Terraform (módulos locales)
 - **Frontend responsivo** — S3 + CloudFront con HTTPS, OAC y SPA fallback
 - **Progress steps** — UI que muestra el estado de cada etapa del proceso
 - **Historial de sesión** — los videos resumidos en la sesión quedan accesibles
+- **CloudWatch Dashboard** — métricas de Lambda, API Gateway y DynamoDB en tiempo real
+- **CI/CD** — deploy automático del frontend y backend en cada push a master
 
 ---
 
@@ -111,6 +118,19 @@ Infraestructura: 100% Terraform (módulos locales)
 | Transcript | Supadata API (browser-side) |
 | IaC | Terraform 1.14 — módulos locales |
 | Secretos | AWS Secrets Manager |
+| Monitoreo | Amazon CloudWatch (Dashboard + Alarms) |
+| CI/CD | GitHub Actions |
+
+---
+
+## 🔄 CI/CD con GitHub Actions
+
+| Evento | Workflow | Acción |
+|--------|----------|--------|
+| Push a `master` con cambios en `frontend/` | `deploy-frontend.yml` | S3 sync + CloudFront invalidation |
+| Push a `master` con cambios en `backend/` | `deploy-backend.yml` | Build ZIP + Lambda update |
+
+Los workflows solo corren cuando cambian los archivos relevantes — path filters para no gastar minutos de Actions innecesariamente.
 
 ---
 
@@ -118,21 +138,27 @@ Infraestructura: 100% Terraform (módulos locales)
 
 ```
 youtube-summarizer/
+├── .github/
+│   └── workflows/
+│       ├── deploy-frontend.yml    # CI: S3 sync + CloudFront
+│       └── deploy-backend.yml    # CI: build + Lambda deploy
+│
 ├── terraform/
 │   ├── main.tf                    # Provider + módulos
 │   ├── variables.tf
 │   ├── outputs.tf
 │   └── modules/
-│       ├── lambda/                # Lambda + IAM + CloudWatch
+│       ├── lambda/                # Lambda + IAM + CloudWatch Logs
 │       ├── api-gateway/           # REST API + CORS
 │       ├── dynamodb/              # Tabla + TTL + PITR
-│       └── storage/               # S3 + CloudFront (OAC)
+│       ├── storage/               # S3 + CloudFront (OAC)
+│       └── monitoring/            # CloudWatch Dashboard + Alarms
 │
 ├── backend/
 │   └── summarizer/
 │       ├── handler.py             # Lambda handler
 │       ├── bedrock_client.py      # Cliente Bedrock (Converse API)
-│       ├── transcript.py          # Módulo transcript (legacy)
+│       ├── transcript.py          # Módulo transcript
 │       ├── requirements.txt
 │       └── build.ps1              # Script de empaquetado ZIP
 │
@@ -163,8 +189,8 @@ cd youtube-summarizer
 
 ```hcl
 # terraform/terraform.tfvars
-aws_region  = "us-east-1"
-aws_profile = "tu-perfil"
+aws_region   = "us-east-1"
+aws_profile  = "tu-perfil"
 project_name = "yt-summarizer"
 environment  = "dev"
 ```
@@ -198,13 +224,17 @@ aws cloudfront create-invalidation \
   --paths "/*"
 ```
 
-### 6. Configurar la API key de Supadata
+---
 
-```bash
-aws secretsmanager create-secret \
-  --name "yt-summarizer/dev/supadata-key" \
-  --secret-string '{"supadata_api_key":"tu-key"}'
-```
+## 📊 Monitoreo
+
+El proyecto incluye un CloudWatch Dashboard con métricas en tiempo real:
+
+- **Lambda** — invocaciones, errores, throttles, duración (p50/p95/max), ejecuciones concurrentes
+- **API Gateway** — requests, latencia (p50/p95), errores 4xx/5xx
+- **DynamoDB** — operaciones GetItem/PutItem (caché hits vs nuevos resumenes), latencia
+
+Alarmas configuradas para errores de Lambda, duración p95 > 25s y errores 5xx en API Gateway.
 
 ---
 
@@ -213,19 +243,8 @@ aws secretsmanager create-secret \
 - **Least privilege IAM** — Lambda solo puede invocar Bedrock, leer/escribir su tabla DynamoDB y leer su secret
 - **S3 privado** — bucket del frontend sin acceso público, solo CloudFront via OAC
 - **HTTPS forzado** — CloudFront redirige HTTP → HTTPS, TLSv1.2_2021
-- **Sin credenciales en código** — API key en Secrets Manager / variable de entorno Lambda
+- **Sin credenciales en código** — API key en Secrets Manager, credenciales AWS en GitHub Secrets
 - **PITR habilitado** — DynamoDB con Point-in-Time Recovery
-
----
-
-## 🔮 Mejoras Futuras
-
-- 🔄 GitHub Actions CI/CD — deploy automático en push a master
-- 📊 CloudWatch Dashboard — métricas de uso, latencia y errores
-- 🔒 OIDC keyless auth para GitHub Actions
-- 🧾 Endpoint `/history` — historial persistente por usuario
-- 📱 PWA — instalable en móvil
-- 🌍 Multi-idioma en la UI
 
 ---
 
@@ -233,15 +252,15 @@ aws secretsmanager create-secret \
 
 Este proyecto tiene una historia de construcción que vale la pena contar, porque refleja exactamente los obstáculos reales que se encuentran al trabajar con APIs de terceros en la nube.
 
-**La idea original era simple:** el frontend extrae el transcript de YouTube y lo manda a Lambda para resumirlo con Bedrock. Implementamos la extracción en el browser usando `youtube-transcript-api` — funcionaba perfecto en local.
+**La idea original era simple:** el frontend extrae el transcript de YouTube y lo manda a Lambda para resumirlo con Bedrock. Implementé la extracción en el browser usando `youtube-transcript-api` — funcionaba perfecto en local.
 
-**Primer golpe de realidad:** al deployar la Lambda, YouTube bloqueaba todas las requests desde IPs de AWS. No es un problema de configuración ni de permisos — YouTube detecta y bloquea activamente rangos de IP de cualquier cloud provider (AWS, GCP, Azure, todos). Pasamos a una arquitectura híbrida: el frontend extrae el transcript desde el browser (IP residencial del usuario) y lo manda a Lambda.
+**Primer golpe de realidad:** al deployar la Lambda, YouTube bloqueaba todas las requests desde IPs de AWS. No es un problema de configuración ni de permisos — YouTube detecta y bloquea activamente rangos de IP de cualquier cloud provider (AWS, GCP, Azure, todos). Pasé a una arquitectura híbrida: el frontend extrae el transcript desde el browser (IP residencial del usuario) y lo manda a Lambda.
 
-**Segundo golpe:** el browser tampoco podía acceder a YouTube directamente por política de CORS. YouTube no permite requests cross-origin desde dominios externos. Probamos múltiples enfoques — CORS proxies gratuitos, el endpoint `/api/timedtext`, la YouTube Data API v3 — cada uno con su propio bloqueo o limitación.
+**Segundo golpe:** el browser tampoco podía acceder a YouTube directamente por política de CORS. YouTube no permite requests cross-origin desde dominios externos. Probé múltiples enfoques — CORS proxies gratuitos, el endpoint `/api/timedtext`, la YouTube Data API v3 — cada uno con su propio bloqueo o limitación.
 
-**El quiebre:** descubrimos que **Supadata**, una API de transcripts de terceros, tiene CORS abierto para browsers. Desde el browser del usuario (IP residencial), Supadata funciona sin restricciones. La arquitectura final quedó así: el browser llama a Supadata, obtiene el transcript, y lo manda a Lambda para el resumen con Bedrock.
+**El quiebre:** descubrí que **Supadata**, una API de transcripts de terceros, tiene CORS abierto para browsers. Desde el browser del usuario (IP residencial), Supadata funciona sin restricciones. La arquitectura final quedó así: el browser llama a Supadata, obtiene el transcript, y lo manda a Lambda para el resumen con Bedrock.
 
-**Bonus de Terraform:** en el camino también tuvimos que lidiar con la recreación manual de la Lambda cuando Terraform perdió el estado por un conflicto de nombres de módulos (`module.lambda_summarizer` vs `module.lambda`), y con el problema clásico de OneDrive bloqueando archivos durante el empaquetado del ZIP en Windows.
+**Bonus de Terraform:** en el camino también tuve que lidiar con la recreación manual de la Lambda cuando Terraform perdió el estado por un conflicto de nombres de módulos, y con el problema clásico de OneDrive bloqueando archivos durante el empaquetado del ZIP en Windows.
 
 El resultado es una arquitectura que aprovecha exactamente la naturaleza del problema: **el transcript se extrae con la IP del usuario** (nunca bloqueada), y **el resumen se genera en la nube** (donde está la potencia de cómputo y la IA). Cada capa hace lo que mejor sabe hacer.
 
@@ -258,16 +277,32 @@ El resultado es una arquitectura que aprovecha exactamente la naturaleza del pro
 - Módulos locales reutilizables con interfaz clara (variables/outputs)
 - Naming convention consistente via variables
 - Default tags en provider — propagados automáticamente a todos los recursos
+- CloudWatch Dashboard y Alarms como código
+
+### 🔹 CI/CD con GitHub Actions
+- Deploy automático del frontend en cada push — S3 sync + CloudFront invalidation
+- Deploy automático de Lambda en cada push — build + update-function-code
+- Path filters — los workflows solo corren cuando cambia el código relevante
 
 ### 🔹 Integración de IA Generativa
 - AWS Bedrock Converse API — agnóstica al modelo, portable a otros LLMs
 - Prompt engineering para JSON estructurado con campos específicos
-- Manejo de errores diferenciado (AccessDeniedException, JSONDecodeError)
+- Selector de idioma — el resumen respeta el idioma elegido por el usuario
 
 ### 🔹 Resolución de Problemas Reales
 - Arquitectura adaptada a las restricciones reales de YouTube y cloud providers
 - Debugging con CloudWatch Logs y AWS CLI
 - Manejo de encoding en Windows (PowerShell + OneDrive + UTF-8)
+
+---
+
+## 🔮 Mejoras Futuras
+
+- 💬 **Asistente conversacional sobre el transcript** — una vez generado el resumen, poder chatear con una IA que tenga el transcript como contexto para hacer preguntas, profundizar en puntos específicos o pedir explicaciones sobre partes del video. Esto convertiría al summarizer en una herramienta de aprendizaje interactiva
+- 🔒 OIDC keyless authentication para GitHub Actions (reemplazar access keys)
+- 🧾 Endpoint `/history` — historial persistente por usuario
+- 📱 PWA — instalable en móvil
+- 🌍 Multi-idioma en la UI completa
 
 ---
 
@@ -295,6 +330,8 @@ GitHub: https://github.com/EmmaLedesma/youtube-summarizer
 [![Terraform](https://img.shields.io/badge/terraform-1.14+-purple)](https://terraform.io)
 [![Python](https://img.shields.io/badge/python-3.12-blue)](https://python.org)
 [![Bedrock](https://img.shields.io/badge/AWS_Bedrock-Claude_3.5_Haiku-teal)](https://aws.amazon.com/bedrock/)
+[![CI Frontend](https://github.com/EmmaLedesma/youtube-summarizer/actions/workflows/deploy-frontend.yml/badge.svg)](https://github.com/EmmaLedesma/youtube-summarizer/actions/workflows/deploy-frontend.yml)
+[![CI Backend](https://github.com/EmmaLedesma/youtube-summarizer/actions/workflows/deploy-backend.yml/badge.svg)](https://github.com/EmmaLedesma/youtube-summarizer/actions/workflows/deploy-backend.yml)
 [![Demo](https://img.shields.io/badge/demo-live-brightgreen)](https://d21n43yg7hlxxz.cloudfront.net)
 
 ---
@@ -331,8 +368,9 @@ Browser
                     └─ DynamoDB.putItem() → saves result
                     └─ response → Browser
 
-Static frontend: S3 + CloudFront (OAC, HTTPS, SPA fallback)
+Static frontend: S3 + CloudFront (OAC, HTTPS)
 Infrastructure: 100% Terraform (local modules)
+CI/CD: GitHub Actions (automatic deploy on push to master)
 ```
 
 ---
@@ -349,9 +387,11 @@ Infrastructure: 100% Terraform (local modules)
 | S3 Bucket (frontend) | `yt-summarizer-dev-frontend` | storage |
 | CloudFront Distribution | `E16INCGHSKTQTT` | storage |
 | CloudFront OAC | `yt-summarizer-dev-oac` | storage |
+| CloudWatch Dashboard | `yt-summarizer-dev` | monitoring |
+| CloudWatch Alarms (3) | lambda-errors, lambda-duration, api-5xx | monitoring |
 | Secrets Manager | `yt-summarizer/dev/supadata-key` | — |
 
-**Total: 9 core AWS resources**
+**Total: 11 core AWS resources**
 
 ---
 
@@ -363,6 +403,8 @@ Infrastructure: 100% Terraform (local modules)
 - **Responsive frontend** — S3 + CloudFront with HTTPS, OAC and SPA fallback
 - **Progress steps** — UI showing the status of each processing stage
 - **Session history** — videos summarized in the session remain accessible
+- **CloudWatch Dashboard** — real-time metrics for Lambda, API Gateway and DynamoDB
+- **CI/CD** — automatic frontend and backend deploy on every push to master
 
 ---
 
@@ -379,6 +421,19 @@ Infrastructure: 100% Terraform (local modules)
 | Transcript | Supadata API (browser-side) |
 | IaC | Terraform 1.14 — local modules |
 | Secrets | AWS Secrets Manager |
+| Monitoring | Amazon CloudWatch (Dashboard + Alarms) |
+| CI/CD | GitHub Actions |
+
+---
+
+## 🔄 CI/CD with GitHub Actions
+
+| Event | Workflow | Action |
+|-------|----------|--------|
+| Push to `master` with changes in `frontend/` | `deploy-frontend.yml` | S3 sync + CloudFront invalidation |
+| Push to `master` with changes in `backend/` | `deploy-backend.yml` | Build ZIP + Lambda update |
+
+Workflows only run when relevant files change — path filters to avoid wasting Actions minutes unnecessarily.
 
 ---
 
@@ -387,7 +442,7 @@ Infrastructure: 100% Terraform (local modules)
 - **Least privilege IAM** — Lambda can only invoke Bedrock, read/write its DynamoDB table, and read its secret
 - **Private S3** — frontend bucket with no public access, only CloudFront via OAC
 - **Forced HTTPS** — CloudFront redirects HTTP → HTTPS, TLSv1.2_2021
-- **No credentials in code** — API key in Secrets Manager / Lambda environment variable
+- **No credentials in code** — API key in Secrets Manager, AWS credentials in GitHub Secrets
 - **PITR enabled** — DynamoDB with Point-in-Time Recovery
 
 ---
@@ -396,15 +451,15 @@ Infrastructure: 100% Terraform (local modules)
 
 This project has a construction history worth telling, because it reflects the real obstacles encountered when working with third-party APIs in the cloud.
 
-**The original idea was simple:** the frontend extracts the YouTube transcript and sends it to Lambda to summarize it with Bedrock. We implemented browser-side extraction using `youtube-transcript-api` — it worked perfectly locally.
+**The original idea was simple:** the frontend extracts the YouTube transcript and sends it to Lambda to summarize it with Bedrock. I implemented browser-side extraction using `youtube-transcript-api` — it worked perfectly locally.
 
-**First reality check:** when deploying to Lambda, YouTube blocked all requests from AWS IP ranges. This isn't a configuration or permissions issue — YouTube actively detects and blocks cloud provider IP ranges (AWS, GCP, Azure, all of them). We moved to a hybrid architecture: the frontend extracts the transcript from the browser (user's residential IP) and sends it to Lambda.
+**First reality check:** when deploying to Lambda, YouTube blocked all requests from AWS IP ranges. This isn't a configuration or permissions issue — YouTube actively detects and blocks cloud provider IP ranges (AWS, GCP, Azure, all of them). I moved to a hybrid architecture: the frontend extracts the transcript from the browser (user's residential IP) and sends it to Lambda.
 
-**Second hit:** the browser couldn't access YouTube directly due to CORS policy. YouTube doesn't allow cross-origin requests from external domains. We tried multiple approaches — free CORS proxies, the `/api/timedtext` endpoint, the YouTube Data API v3 — each with its own block or limitation.
+**Second hit:** the browser couldn't access YouTube directly due to CORS policy. YouTube doesn't allow cross-origin requests from external domains. I tried multiple approaches — free CORS proxies, the `/api/timedtext` endpoint, the YouTube Data API v3 — each with its own block or limitation.
 
-**The breakthrough:** we discovered that **Supadata**, a third-party transcript API, has open CORS for browsers. From the user's browser (residential IP), Supadata works without restrictions. The final architecture: the browser calls Supadata, gets the transcript, and sends it to Lambda for Bedrock summarization.
+**The breakthrough:** I discovered that **Supadata**, a third-party transcript API, has open CORS for browsers. From the user's browser (residential IP), Supadata works without restrictions. The final architecture: browser calls Supadata, gets the transcript, and sends it to Lambda for Bedrock summarization.
 
-**Terraform bonus:** along the way we also had to deal with manual Lambda recreation when Terraform lost state due to a module naming conflict (`module.lambda_summarizer` vs `module.lambda`), and the classic OneDrive file locking issue during ZIP packaging on Windows.
+**Terraform bonus:** along the way I also had to deal with manual Lambda recreation when Terraform lost state due to a module naming conflict, and the classic OneDrive file locking issue during ZIP packaging on Windows.
 
 The result is an architecture that leverages exactly the nature of the problem: **the transcript is extracted with the user's IP** (never blocked), and **the summary is generated in the cloud** (where the compute power and AI live). Each layer does what it does best.
 
@@ -421,11 +476,17 @@ The result is an architecture that leverages exactly the nature of the problem: 
 - Reusable local modules with clean interface (variables/outputs)
 - Consistent naming convention via variables
 - Default tags in provider — automatically propagated to all resources
+- CloudWatch Dashboard and Alarms as code
+
+### 🔹 CI/CD with GitHub Actions
+- Automatic frontend deploy on every push — S3 sync + CloudFront invalidation
+- Automatic Lambda deploy on every push — build + update-function-code
+- Path filters — workflows only run when relevant code changes
 
 ### 🔹 Generative AI Integration
 - AWS Bedrock Converse API — model-agnostic, portable to other LLMs
 - Prompt engineering for structured JSON with specific fields
-- Differentiated error handling (AccessDeniedException, JSONDecodeError)
+- Language selector — summary respects the language chosen by the user
 
 ### 🔹 Real Problem Solving
 - Architecture adapted to the real constraints of YouTube and cloud providers
@@ -436,12 +497,11 @@ The result is an architecture that leverages exactly the nature of the problem: 
 
 ## 🔮 Future Improvements
 
-- 🔄 GitHub Actions CI/CD — automatic deploy on push to master
-- 📊 CloudWatch Dashboard — usage metrics, latency and errors
-- 🔒 OIDC keyless auth for GitHub Actions
+- 💬 **Conversational assistant on the transcript** — once the summary is generated, chat with an AI that has the full transcript as context to ask questions, dig deeper into specific points, or request explanations about parts of the video. This would turn the summarizer into an interactive learning tool
+- 🔒 OIDC keyless authentication for GitHub Actions (replace access keys)
 - 🧾 `/history` endpoint — persistent history per user
 - 📱 PWA — installable on mobile
-- 🌍 Multi-language UI
+- 🌍 Full multi-language UI
 
 ---
 
