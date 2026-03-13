@@ -4,6 +4,7 @@
 
 GitHub: https://github.com/EmmaLedesma/youtube-summarizer
 
+
 [![AWS](https://img.shields.io/badge/AWS-us--east--1-orange)](https://aws.amazon.com)
 [![Terraform](https://img.shields.io/badge/terraform-1.14+-purple)](https://terraform.io)
 [![Python](https://img.shields.io/badge/python-3.12-blue)](https://python.org)
