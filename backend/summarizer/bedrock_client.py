@@ -6,63 +6,52 @@ import json
 import boto3
 from botocore.exceptions import ClientError
 
-
 MODEL_ID = "us.anthropic.claude-3-5-haiku-20241022-v1:0"
 
 
 def get_bedrock_client(region: str = "us-east-1"):
-    """Crea cliente de Bedrock Runtime usando el rol IAM de la Lambda."""
     return boto3.client("bedrock-runtime", region_name=region)
 
 
 def build_prompt(transcript_text: str, language: str) -> str:
-    """
-    Construye el prompt para Claude 3.5 Haiku.
-    """
-    return f"""You are an expert at analyzing and summarizing video content.
+    return f"""You are an expert at analyzing and summarizing video and lecture content.
 
-Analyze the following video transcript and provide a structured summary.
+Analyze the following video transcript and provide a DETAILED and COMPREHENSIVE structured summary.
 The transcript language is: {language}
-Respond in the SAME language as the transcript.
+Respond in the SAME language as the transcript. If the language is Spanish, respond entirely in Spanish. If English, in English, etc.
 
 TRANSCRIPT:
-{transcript_text[:15000]}
+{transcript_text[:20000]}
 
 Provide your response in the following JSON format (no markdown, just JSON):
 {{
-  "executive_summary": "2-3 sentence overview of the main topic",
+  "executive_summary": "A thorough 4-6 sentence overview covering the main topic, key arguments, and conclusions of the video",
   "key_points": [
-    "Key point 1",
-    "Key point 2",
-    "Key point 3",
-    "Key point 4",
-    "Key point 5"
+    "Detailed key point 1 — include context and explanation, not just a title",
+    "Detailed key point 2 — include context and explanation, not just a title",
+    "Detailed key point 3 — include context and explanation, not just a title",
+    "Detailed key point 4 — include context and explanation, not just a title",
+    "Detailed key point 5 — include context and explanation, not just a title",
+    "Detailed key point 6 — include context and explanation, not just a title",
+    "Detailed key point 7 — include context and explanation, not just a title",
+    "Detailed key point 8 — include context and explanation, not just a title"
   ],
-  "main_topics": ["topic1", "topic2", "topic3"],
+  "main_topics": ["topic1", "topic2", "topic3", "topic4", "topic5"],
   "detected_language": "language name in English",
   "content_type": "tutorial/lecture/conference/interview/other"
 }}"""
 
 
 def summarize_transcript(transcript_text: str, language: str) -> dict:
-    """
-    Envía el transcript a Claude 3.5 Haiku via Bedrock y retorna el resumen.
-    Usa la Converse API — agnóstica al modelo.
-    """
     client = get_bedrock_client()
     prompt = build_prompt(transcript_text, language)
 
     try:
         response = client.converse(
             modelId=MODEL_ID,
-            messages=[
-                {
-                    "role": "user",
-                    "content": [{"text": prompt}],
-                }
-            ],
+            messages=[{"role": "user", "content": [{"text": prompt}]}],
             inferenceConfig={
-                "maxTokens": 1024,
+                "maxTokens": 2048,
                 "temperature": 0.3,
                 "topP": 0.9,
             },
@@ -70,20 +59,16 @@ def summarize_transcript(transcript_text: str, language: str) -> dict:
 
         response_text = response["output"]["message"]["content"][0]["text"]
         summary = json.loads(response_text)
-
         summary["_usage"] = {
             "input_tokens": response["usage"]["inputTokens"],
             "output_tokens": response["usage"]["outputTokens"],
         }
-
         return summary
 
     except ClientError as e:
         error_code = e.response["Error"]["Code"]
         if error_code == "AccessDeniedException":
-            raise RuntimeError(
-                "Sin acceso a Bedrock. Verificá los permisos IAM."
-            )
+            raise RuntimeError("Sin acceso a Bedrock. Verificá los permisos IAM.")
         raise RuntimeError(f"Error de Bedrock: {error_code} — {str(e)}")
 
     except json.JSONDecodeError:

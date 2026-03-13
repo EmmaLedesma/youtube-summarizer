@@ -1,8 +1,7 @@
-# ── IAM Role — identidad de la Lambda ───────────────────────────
+# ── IAM Role — identidad de la Lambda ───────────────────────
 resource "aws_iam_role" "lambda_role" {
   name = "${var.function_name}-role"
 
-  # Trust policy: solo Lambda puede asumir este rol
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -15,13 +14,13 @@ resource "aws_iam_role" "lambda_role" {
   tags = var.tags
 }
 
-# ── Policy: CloudWatch Logs ──────────────────────────────────────
+# ── Policy: CloudWatch Logs ──────────────────────────────────
 resource "aws_iam_role_policy_attachment" "lambda_logs" {
   role       = aws_iam_role.lambda_role.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
-# ── Policy: Bedrock + DynamoDB (least privilege) ─────────────────
+# ── Policy: Bedrock + DynamoDB + Secrets Manager ─────────────
 resource "aws_iam_role_policy" "lambda_permissions" {
   name = "${var.function_name}-permissions"
   role = aws_iam_role.lambda_role.id
@@ -47,20 +46,27 @@ resource "aws_iam_role_policy" "lambda_permissions" {
           "dynamodb:Query",
         ]
         Resource = var.dynamodb_table_arn
+      },
+      {
+        Sid    = "SecretsManagerRead"
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue"
+        ]
+        Resource = "arn:aws:secretsmanager:us-east-1:493588233753:secret:yt-summarizer/dev/*"
       }
     ]
   })
 }
 
-# ── CloudWatch Log Group (explícito para control de retención) ───
+# ── CloudWatch Log Group ─────────────────────────────────────
 resource "aws_cloudwatch_log_group" "lambda_logs" {
   name              = "/aws/lambda/${var.function_name}"
   retention_in_days = 30
-
-  tags = var.tags
+  tags              = var.tags
 }
 
-# ── Lambda Function ──────────────────────────────────────────────
+# ── Lambda Function ──────────────────────────────────────────
 resource "aws_lambda_function" "this" {
   function_name = var.function_name
   role          = aws_iam_role.lambda_role.arn

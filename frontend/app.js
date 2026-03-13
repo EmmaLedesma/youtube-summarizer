@@ -3,14 +3,20 @@
    app.js
    ═══════════════════════════════════════════════════════════ */
 
-// ── CONFIG ──────────────────────────────────────────────────
-const API_URL = 'https://8fbiu33ok7.execute-api.us-east-1.amazonaws.com/dev/summarize';
+const API_URL      = 'https://8fbiu33ok7.execute-api.us-east-1.amazonaws.com/dev/summarize';
+const SUPADATA_URL = 'https://api.supadata.ai/v1/youtube/transcript';
+const SUPADATA_KEY = 'sd_27f668e05bce4d8026fb537538ab7050';
 
-// ── STATE ───────────────────────────────────────────────────
+const LANG_NAMES = {
+  auto: 'Auto', es: 'Spanish', en: 'English', pt: 'Portuguese',
+  fr: 'French', de: 'German', it: 'Italian',
+  ja: 'Japanese', ko: 'Korean', zh: 'Chinese',
+};
+
 const sessionHistory = [];
 
-// ── DOM REFS ────────────────────────────────────────────────
 const urlInput       = document.getElementById('urlInput');
+const langSelect     = document.getElementById('langSelect');
 const btnSummarize   = document.getElementById('btnSummarize');
 const statusBar      = document.getElementById('statusBar');
 const statusText     = document.getElementById('statusText');
@@ -19,7 +25,6 @@ const progressSteps  = document.getElementById('progressSteps');
 const videoPanel     = document.getElementById('videoPanel');
 const summaryPanel   = document.getElementById('summaryPanel');
 const videoIframe    = document.getElementById('videoIframe');
-const videoIdDisplay = document.getElementById('videoIdDisplay');
 const cachedBadge    = document.getElementById('cachedBadge');
 const execSummary    = document.getElementById('execSummary');
 const keyPointsList  = document.getElementById('keyPoints');
@@ -29,46 +34,53 @@ const historyGrid    = document.getElementById('historyGrid');
 
 // ── UTILITIES ───────────────────────────────────────────────
 
-/**
- * Extrae el videoId de cualquier formato de URL de YouTube.
- * Soporta: watch?v=, youtu.be/, embed/
- */
 function extractVideoId(url) {
   const patterns = [
     /(?:v=)([a-zA-Z0-9_-]{11})/,
     /(?:youtu\.be\/)([a-zA-Z0-9_-]{11})/,
     /(?:embed\/)([a-zA-Z0-9_-]{11})/,
   ];
-  for (const pattern of patterns) {
-    const match = url.match(pattern);
-    if (match) return match[1];
+  for (const p of patterns) {
+    const m = url.match(p);
+    if (m) return m[1];
   }
   return null;
 }
 
-/**
- * Muestra el status bar con tipo (info | error | success) y mensaje.
- */
 function setStatus(type, text, iconPath) {
   statusBar.className = `status-bar show ${type}`;
   statusText.textContent = text;
   statusIcon.innerHTML = iconPath;
 }
 
-function clearStatus() {
-  statusBar.className = 'status-bar';
+function setStep(n) {
+  ['step1','step2','step3','step4'].forEach((id, i) => {
+    const el = document.getElementById(id);
+    if (i + 1 < n)        el.className = 'step done';
+    else if (i + 1 === n) el.className = 'step active';
+    else                   el.className = 'step';
+  });
 }
 
-/**
- * Activa el step indicado (1-4) en la barra de progreso.
- */
-function setStep(n) {
-  ['step1', 'step2', 'step3', 'step4'].forEach((id, i) => {
-    const el = document.getElementById(id);
-    if (i + 1 < n)       el.className = 'step done';
-    else if (i + 1 === n) el.className = 'step active';
-    else                  el.className = 'step';
-  });
+// ── TRANSCRIPT via Supadata ──────────────────────────────────
+
+async function fetchTranscript(videoId, langCode) {
+  let url = `${SUPADATA_URL}?videoId=${videoId}&text=true`;
+  if (langCode && langCode !== 'auto') url += `&lang=${langCode}`;
+
+  const res = await fetch(url, { headers: { 'x-api-key': SUPADATA_KEY } });
+
+  if (!res.ok) {
+    if (res.status === 404) throw new Error('Este video no tiene subtítulos disponibles.');
+    if (res.status === 429) throw new Error('Límite de requests alcanzado. Intentá en unos minutos.');
+    throw new Error(`Error obteniendo subtítulos (${res.status})`);
+  }
+
+  const data = await res.json();
+  const text = (data.content || '').trim();
+  const lang = data.lang || langCode || 'en';
+  if (!text) throw new Error('El transcript está vacío.');
+  return { text, language: lang };
 }
 
 // ── RENDER ──────────────────────────────────────────────────
@@ -77,14 +89,8 @@ function renderSummary(data, videoId) {
   const s = data.summary;
 
   execSummary.textContent = s.executiveSummary || '';
-
-  keyPointsList.innerHTML = (s.keyPoints || [])
-    .map(point => `<li>${point}</li>`)
-    .join('');
-
-  topicsRow.innerHTML = (s.mainTopics || [])
-    .map(topic => `<span class="topic-chip">${topic}</span>`)
-    .join('');
+  keyPointsList.innerHTML = (s.keyPoints || []).map(p => `<li>${p}</li>`).join('');
+  topicsRow.innerHTML = (s.mainTopics || []).map(t => `<span class="topic-chip">${t}</span>`).join('');
 
   metaRow.innerHTML = `
     <span class="meta-chip">
@@ -112,10 +118,8 @@ function renderSummary(data, videoId) {
     </span>
   `;
 
-  videoIdDisplay.textContent = videoId;
   cachedBadge.style.display = data.cached ? 'inline-flex' : 'none';
   videoIframe.src = `https://www.youtube.com/embed/${videoId}`;
-
   videoPanel.classList.add('show');
   summaryPanel.classList.add('show');
 }
@@ -123,8 +127,7 @@ function renderSummary(data, videoId) {
 // ── HISTORY ─────────────────────────────────────────────────
 
 function addToHistory(videoId, summary) {
-  const exists = sessionHistory.find(i => i.videoId === videoId);
-  if (!exists) {
+  if (!sessionHistory.find(i => i.videoId === videoId)) {
     sessionHistory.unshift({ videoId, summary, ts: new Date() });
   }
   renderHistory();
@@ -153,33 +156,22 @@ function renderHistory() {
 function loadFromHistory(videoId) {
   const item = sessionHistory.find(i => i.videoId === videoId);
   if (!item) return;
-
   videoIframe.src = `https://www.youtube.com/embed/${videoId}`;
-  videoIdDisplay.textContent = videoId;
   cachedBadge.style.display = 'inline-flex';
-
   execSummary.textContent = item.summary.executiveSummary || '';
   keyPointsList.innerHTML = (item.summary.keyPoints || []).map(p => `<li>${p}</li>`).join('');
   topicsRow.innerHTML = (item.summary.mainTopics || []).map(t => `<span class="topic-chip">${t}</span>`).join('');
   metaRow.innerHTML = '';
-
   videoPanel.classList.add('show');
   summaryPanel.classList.add('show');
-
   document.getElementById('summarizer').scrollIntoView({ behavior: 'smooth' });
 }
 
 // ── MAIN FLOW ────────────────────────────────────────────────
-/**
- * ARQUITECTURA:
- * El frontend solo envía el videoId a la API.
- * La Lambda extrae el transcript server-side via Supadata,
- * llama a Bedrock y guarda en DynamoDB.
- *
- * Flujo: Browser → API Gateway → Lambda → Supadata → Bedrock → DynamoDB
- */
+
 async function handleSummarize() {
   const url = urlInput.value.trim();
+  const langCode = langSelect.value;
 
   if (!url) {
     setStatus('error', 'Ingresá una URL de YouTube.',
@@ -194,53 +186,45 @@ async function handleSummarize() {
     return;
   }
 
-  // Reset UI
   btnSummarize.disabled = true;
   videoPanel.classList.remove('show');
   summaryPanel.classList.remove('show');
   progressSteps.classList.add('show');
 
   try {
-    // ── Step 1: preview del video inmediato
     setStep(1);
-    setStatus('info', 'Cargando video…',
-      '<circle cx="12" cy="12" r="10"/>');
+    setStatus('info', 'Cargando video…', '<circle cx="12" cy="12" r="10"/>');
     videoIframe.src = `https://www.youtube.com/embed/${videoId}`;
-    videoIdDisplay.textContent = videoId;
     cachedBadge.style.display = 'none';
     videoPanel.classList.add('show');
 
-    // ── Step 2: Lambda obtiene transcript via Supadata (server-side)
     setStep(2);
     setStatus('info', 'Obteniendo subtítulos…',
       '<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/>');
+    const { text: transcriptText, language } = await fetchTranscript(videoId, langCode);
 
-    // ── Step 3: Bedrock analiza
     setStep(3);
     setStatus('info', 'Claude AI está analizando el contenido…',
       '<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>');
 
-    // Un solo request — la Lambda hace todo el trabajo pesado
+    // Determinar idioma para el resumen
+    const summaryLang = langCode !== 'auto'
+      ? (LANG_NAMES[langCode] || langCode)
+      : language;
+
     const response = await fetch(API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ videoId }),
+      body: JSON.stringify({ videoId, transcriptText, language: summaryLang }),
     });
 
     if (!response.ok) {
       const errData = await response.json().catch(() => ({}));
-      if (response.status === 422) {
-        throw new Error(errData.message || 'Este video no tiene subtítulos disponibles.');
-      }
-      if (response.status === 502) {
-        throw new Error(errData.message || 'Error conectando con el servicio de subtítulos.');
-      }
       throw new Error(errData.message || `Error del servidor (${response.status})`);
     }
 
     const data = await response.json();
 
-    // ── Step 4: renderizar
     setStep(4);
     renderSummary(data, videoId);
     addToHistory(videoId, data.summary);
@@ -250,7 +234,6 @@ async function handleSummarize() {
       data.cached ? '¡Resumen cargado desde caché!' : '¡Resumen generado con éxito!',
       '<path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>'
     );
-
     setTimeout(() => progressSteps.classList.remove('show'), 2000);
 
   } catch (err) {
@@ -262,13 +245,8 @@ async function handleSummarize() {
   }
 }
 
-// ── EVENT LISTENERS ──────────────────────────────────────────
 btnSummarize.addEventListener('click', handleSummarize);
-
-urlInput.addEventListener('keydown', e => {
-  if (e.key === 'Enter') handleSummarize();
-});
-
+urlInput.addEventListener('keydown', e => { if (e.key === 'Enter') handleSummarize(); });
 document.querySelectorAll('.nav-pill').forEach(pill => {
   pill.addEventListener('click', function () {
     document.querySelectorAll('.nav-pill').forEach(p => p.classList.remove('active'));

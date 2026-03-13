@@ -1,6 +1,6 @@
 """
-Lambda handler — recibe videoId, obtiene transcript via Supadata y llama a Bedrock.
-La extracción del transcript se hace server-side para evitar bloqueos de IP y CORS.
+Lambda handler — recibe videoId + transcriptText desde el frontend y llama a Bedrock.
+El transcript se extrae en el browser del usuario (IP residencial).
 """
 
 import json
@@ -10,7 +10,6 @@ from datetime import datetime, timezone, timedelta
 import boto3
 
 from bedrock_client import summarize_transcript
-from transcript import get_transcript
 
 DYNAMODB_TABLE = os.environ.get("DYNAMODB_TABLE", "yt-summarizer-dev-summaries")
 AWS_REGION = os.environ.get("AWS_REGION_NAME", "us-east-1")
@@ -34,9 +33,7 @@ def build_response(status_code: int, body: dict) -> dict:
 def save_to_dynamodb(video_id: str, summary: dict, language: str) -> str:
     table = dynamodb.Table(DYNAMODB_TABLE)
     created_at = datetime.now(timezone.utc).isoformat()
-    expires_at = int(
-        (datetime.now(timezone.utc) + timedelta(days=90)).timestamp()
-    )
+    expires_at = int((datetime.now(timezone.utc) + timedelta(days=90)).timestamp())
 
     table.put_item(Item={
         "videoId": video_id,
@@ -62,14 +59,18 @@ def lambda_handler(event, context):
     try:
         body = json.loads(event.get("body", "{}"))
         video_id = body.get("videoId", "").strip()
+        transcript_text = body.get("transcriptText", "").strip()
+        language = body.get("language", "en").strip()
+
+        print(f"INFO: videoId={video_id}, language={language}, transcript_chars={len(transcript_text)}")
 
         if not video_id:
-            return build_response(400, {
-                "error": "videoId requerido",
-                "message": "Enviá el videoId en el body del request."
-            })
+            return build_response(400, {"error": "videoId requerido"})
 
-        # ── Verificar caché en DynamoDB ──────────────────────
+        if not transcript_text:
+            return build_response(400, {"error": "transcriptText requerido"})
+
+        # ── Verificar caché ──────────────────────────────────
         table = dynamodb.Table(DYNAMODB_TABLE)
         existing = table.query(
             KeyConditionExpression="videoId = :vid",
@@ -80,6 +81,7 @@ def lambda_handler(event, context):
 
         if existing.get("Items"):
             cached = existing["Items"][0]
+            print(f"INFO: cache hit para videoId={video_id}")
             return build_response(200, {
                 "videoId": video_id,
                 "cached": True,
@@ -87,13 +89,10 @@ def lambda_handler(event, context):
                 "summary": cached["summary"],
             })
 
-        # ── Obtener transcript via Supadata ──────────────────
-        transcript = get_transcript(video_id)
-        transcript_text = transcript["text"]
-        language = transcript["language"]
-
         # ── Llamar a Bedrock ─────────────────────────────────
+        print(f"INFO: llamando a Bedrock")
         summary = summarize_transcript(transcript_text, language)
+        print(f"INFO: resumen generado")
 
         # ── Guardar en DynamoDB ──────────────────────────────
         created_at = save_to_dynamodb(video_id, summary, language)
@@ -111,23 +110,10 @@ def lambda_handler(event, context):
             },
         })
 
-    except ValueError as e:
-        # Subtítulos no disponibles, video privado, etc.
-        return build_response(422, {
-            "error": "Contenido no procesable",
-            "message": str(e)
-        })
-
     except RuntimeError as e:
-        # Errores de conectividad con Supadata o Bedrock
-        return build_response(502, {
-            "error": "Error de servicio externo",
-            "message": str(e)
-        })
+        print(f"RUNTIME ERROR: {str(e)}")
+        return build_response(502, {"error": "Error de servicio externo", "message": str(e)})
 
     except Exception as e:
-        print(f"ERROR: {type(e).__name__}: {str(e)}")
-        return build_response(500, {
-            "error": "Error interno",
-            "message": "Ocurrió un error procesando el video."
-        })
+        print(f"UNEXPECTED ERROR: {type(e).__name__}: {str(e)}")
+        return build_response(500, {"error": "Error interno", "message": "Ocurrió un error procesando el video."})

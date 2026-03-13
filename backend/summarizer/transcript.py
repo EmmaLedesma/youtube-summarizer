@@ -1,48 +1,27 @@
 """
-transcript.py — Extrae transcripts de YouTube via Supadata API.
-
-Supadata corre server-side, sin restricciones de IP ni CORS.
-Documentación: https://supadata.ai/documentation
+transcript.py — Extrae transcripts de YouTube via youtube-transcript-api.
 """
 
-import urllib.request
-import urllib.error
-import json
-
-
-SUPADATA_BASE_URL = "https://api.supadata.ai/v1/youtube/transcript"
+from youtube_transcript_api import YouTubeTranscriptApi, NoTranscriptFound, TranscriptsDisabled
 
 
 def get_transcript(video_id: str) -> dict:
-    """
-    Obtiene el transcript de un video de YouTube via Supadata.
-
-    Args:
-        video_id: ID del video (ej: "dQw4w9WgXcQ")
-
-    Returns:
-        dict con keys:
-            - text (str): transcript completo como texto plano
-            - language (str): idioma detectado
-
-    Raises:
-        ValueError: si el video no tiene subtítulos disponibles
-        RuntimeError: si hay un error de conexión con Supadata
-    """
-    url = f"{SUPADATA_BASE_URL}?videoId={video_id}&text=true"
-
     try:
-        req = urllib.request.Request(
-            url,
-            headers={"Accept": "application/json"},
-        )
+        transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
 
-        with urllib.request.urlopen(req, timeout=15) as response:
-            data = json.loads(response.read().decode("utf-8"))
+        # Prioridad: manual > auto-generated, cualquier idioma
+        try:
+            transcript = transcript_list.find_manually_created_transcript(
+                ['en', 'es', 'pt', 'fr', 'de', 'it', 'ja', 'ko', 'zh', 'ru', 'ar', 'hi']
+            )
+        except NoTranscriptFound:
+            transcript = transcript_list.find_generated_transcript(
+                ['en', 'es', 'pt', 'fr', 'de', 'it', 'ja', 'ko', 'zh', 'ru', 'ar', 'hi']
+            )
 
-        # Supadata devuelve { content: "...", lang: "en" } cuando text=true
-        transcript_text = data.get("content", "").strip()
-        language_code = data.get("lang", "en")
+        language_code = transcript.language_code
+        entries = transcript.fetch()
+        transcript_text = " ".join(entry["text"] for entry in entries).strip()
 
         if not transcript_text:
             raise ValueError("El transcript está vacío.")
@@ -53,39 +32,21 @@ def get_transcript(video_id: str) -> dict:
             "languageCode": language_code,
         }
 
-    except urllib.error.HTTPError as e:
-        if e.code == 404:
-            raise ValueError(
-                "No se encontraron subtítulos para este video. "
-                "El video puede ser privado o no tener subtítulos disponibles."
-            )
-        if e.code == 429:
-            raise RuntimeError(
-                "Límite de requests a Supadata alcanzado. Intentá en unos minutos."
-            )
-        raise RuntimeError(f"Error de Supadata (HTTP {e.code}): {e.reason}")
-
-    except urllib.error.URLError as e:
-        raise RuntimeError(f"No se pudo conectar a Supadata: {str(e.reason)}")
-
-    except json.JSONDecodeError:
-        raise RuntimeError("Respuesta inválida de Supadata.")
+    except TranscriptsDisabled:
+        raise ValueError("Este video tiene los subtítulos desactivados.")
+    except NoTranscriptFound:
+        raise ValueError("No se encontró transcript para este video.")
+    except Exception as e:
+        if isinstance(e, ValueError):
+            raise
+        raise RuntimeError(f"Error obteniendo transcript: {str(e)}")
 
 
 def _language_code_to_name(code: str) -> str:
-    """Convierte código ISO 639-1 a nombre legible."""
     mapping = {
-        "en": "English",
-        "es": "Spanish",
-        "pt": "Portuguese",
-        "fr": "French",
-        "de": "German",
-        "it": "Italian",
-        "ja": "Japanese",
-        "ko": "Korean",
-        "zh": "Chinese",
-        "ru": "Russian",
-        "ar": "Arabic",
-        "hi": "Hindi",
+        "en": "English", "es": "Spanish", "pt": "Portuguese",
+        "fr": "French", "de": "German", "it": "Italian",
+        "ja": "Japanese", "ko": "Korean", "zh": "Chinese",
+        "ru": "Russian", "ar": "Arabic", "hi": "Hindi",
     }
     return mapping.get(code.lower(), code.upper())

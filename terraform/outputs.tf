@@ -1,24 +1,38 @@
+# ═══════════════════════════════════════════════════════════
+# YT Summarizer — Root outputs
+# terraform/outputs.tf
+# ═══════════════════════════════════════════════════════════
+
+# ── API ──────────────────────────────────────────────────────
+output "api_url" {
+  description = "Endpoint completo de la API para resumir videos."
+  value       = module.api_gateway.api_url
+}
+
+# ── Lambda ───────────────────────────────────────────────────
+output "lambda_function_name" {
+  description = "Nombre de la función Lambda."
+  value       = module.lambda.function_name
+}
+
+# ── DynamoDB ─────────────────────────────────────────────────
 output "dynamodb_table_name" {
-  description = "DynamoDB summaries table name"
+  description = "Nombre de la tabla DynamoDB."
   value       = module.dynamodb.table_name
 }
 
-output "dynamodb_table_arn" {
-  description = "DynamoDB summaries table ARN"
-  value       = module.dynamodb.table_arn
+# ── Frontend ─────────────────────────────────────────────────
+output "frontend_bucket" {
+  description = "Nombre del bucket S3 donde se hostea el frontend."
+  value       = module.storage.bucket_name
 }
 
-output "lambda_summarizer_name" {
-  description = "Summarizer Lambda function name"
-  value       = module.lambda_summarizer.function_name
+output "frontend_url" {
+  description = "URL pública del frontend via CloudFront."
+  value       = module.storage.cloudfront_url
 }
 
-output "lambda_summarizer_invoke_arn" {
-  description = "Summarizer Lambda invoke ARN"
-  value       = module.lambda_summarizer.invoke_arn
-}
-
-output "api_url" {
-  description = "API Gateway endpoint URL"
-  value       = module.api_gateway.api_url
+output "cloudfront_distribution_id" {
+  description = "ID de la distribución CloudFront. Usarlo para invalidar caché después de un deploy."
+  value       = module.storage.cloudfront_distribution_id
 }

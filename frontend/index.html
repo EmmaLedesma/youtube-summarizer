@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>YT Summarizer — Emmanuel Ledesma</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="header-inner">
+    <div class="header-badge">
+      <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="48" height="48" rx="12" fill="rgba(131,197,190,0.18)"/>
+        <path d="M38 16.5C38 16.5 37.6 14.1 36.5 13C35.1 11.5 33.5 11.5 32.7 11.4C27.6 11 20 11 20 11H20C20 11 12.4 11 7.3 11.4C6.5 11.5 4.9 11.5 3.5 13C2.4 14.1 2 16.5 2 16.5S1.5 19.3 1.5 22.1V24.7C1.5 27.5 2 30.3 2 30.3S2.4 32.7 3.5 33.8C4.9 35.3 6.8 35.3 7.7 35.4C10.5 35.7 20 35.8 20 35.8C20 35.8 27.6 35.8 32.7 35.4C33.5 35.3 35.1 35.3 36.5 33.8C37.6 32.7 38 30.3 38 30.3S38.5 27.5 38.5 24.7V22.1C38.5 19.3 38 16.5 38 16.5Z" fill="#83c5be" opacity="0.7"/>
+        <path d="M16 28V19L26 23.5L16 28Z" fill="white"/>
+        <circle cx="36" cy="12" r="6" fill="#006d77"/>
+        <path d="M34 9L34 15M31 12H37" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div class="header-text">
+      <h1>YT <span>Summarizer</span></h1>
+      <p>Resumí cualquier video en segundos · Powered by AWS Bedrock + Claude AI</p>
+    </div>
+    <div class="header-links">
+      <a href="https://github.com/EmmaLedesma/youtube-summarizer" target="_blank" rel="noopener" class="link-github">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.87 8.17 6.84 9.5.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.87 1.52 2.34 1.07 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.92 0-1.11.38-2 1.03-2.71-.1-.25-.45-1.29.1-2.64 0 0 .84-.27 2.75 1.02.79-.22 1.65-.33 2.5-.33.85 0 1.71.11 2.5.33 1.91-1.29 2.75-1.02 2.75-1.02.55 1.35.2 2.39.1 2.64.65.71 1.03 1.6 1.03 2.71 0 3.82-2.34 4.66-4.57 4.91.36.31.69.92.69 1.85V21c0 .27.16.59.67.5C19.14 20.16 22 16.42 22 12A10 10 0 0012 2z"/></svg>
+        GitHub
+      </a>
+      <a href="https://www.linkedin.com/in/emmanuel-ledesmam" target="_blank" rel="noopener" class="link-linkedin">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 8a6 6 0 016 6v7h-4v-7a2 2 0 00-2-2 2 2 0 00-2 2v7h-4v-7a6 6 0 016-6zM2 9h4v12H2z"/><circle cx="4" cy="4" r="2"/></svg>
+        LinkedIn
+      </a>
+    </div>
+  </div>
+</header>
+
+<!-- NAV PILLS -->
+<nav class="nav-pills" aria-label="Secciones">
+  <div class="nav-pills-inner">
+    <a href="#summarizer" class="nav-pill active">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+      Summarizer
+    </a>
+    <a href="#history" class="nav-pill">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      Historial
+    </a>
+    <a href="https://github.com/EmmaLedesma/youtube-summarizer" target="_blank" class="nav-pill">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+      Ver código
+    </a>
+  </div>
+</nav>
+
+<!-- MAIN -->
+<main>
+  <section id="summarizer">
+    <div class="input-card">
+      <div class="section-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        Pegá la URL de un video de YouTube
+      </div>
+      <div class="url-row">
+        <input type="url" id="urlInput" class="url-input" placeholder="https://www.youtube.com/watch?v=..." autocomplete="off" spellcheck="false"/>
+      </div>
+      <div class="options-row">
+        <div class="lang-selector-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="2" y1="12" x2="22" y2="12"/>
+            <path d="M12 2a15.3 15.3 0 010 20M12 2a15.3 15.3 0 000 20"/>
+          </svg>
+          <select id="langSelect" class="lang-select">
+            <option value="auto">Idioma automático</option>
+            <option value="es">Español</option>
+            <option value="en">English</option>
+            <option value="pt">Português</option>
+            <option value="fr">Français</option>
+            <option value="de">Deutsch</option>
+            <option value="it">Italiano</option>
+            <option value="ja">日本語</option>
+            <option value="ko">한국어</option>
+            <option value="zh">中文</option>
+          </select>
+        </div>
+        <button id="btnSummarize" class="btn-summarize">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+          Resumir
+        </button>
+      </div>
+      <div id="statusBar" class="status-bar">
+        <svg id="statusIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"></svg>
+        <span id="statusText"></span>
+      </div>
+      <div id="progressSteps" class="progress-steps">
+        <div class="step" id="step1">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+          Video
+        </div>
+        <div class="step" id="step2">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          Transcript
+        </div>
+        <div class="step" id="step3">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          Bedrock AI
+        </div>
+        <div class="step" id="step4">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          Listo
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="results-grid">
+    <div id="videoPanel" class="video-panel">
+      <div class="video-wrapper">
+        <iframe id="videoIframe" allowfullscreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>
+      </div>
+      <div class="video-meta">
+        <div id="cachedBadge" class="vid-badge" style="display:none">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          Desde caché
+        </div>
+      </div>
+    </div>
+
+    <div id="summaryPanel" class="summary-panel">
+      <div class="section-title" style="margin-bottom:1rem">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+        Resumen
+      </div>
+      <div id="execSummary" class="exec-summary"></div>
+      <div class="key-points-title">Puntos clave</div>
+      <ul id="keyPoints" class="key-points"></ul>
+      <div class="key-points-title">Tópicos</div>
+      <div id="topicsRow" class="topics-row"></div>
+      <div id="metaRow" class="meta-row"></div>
+    </div>
+  </div>
+
+  <section id="history" class="history-section">
+    <div class="section-title">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      Historial de sesión
+    </div>
+    <div id="historyGrid" class="history-grid">
+      <div class="history-empty">Todavía no resumiste ningún video en esta sesión.</div>
+    </div>
+  </section>
+</main>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-name">Emmanuel Ledesma</div>
+  <div style="margin-top:0.25rem">
+    Cloud Engineer · Portfolio Project ·
+    <a href="https://github.com/EmmaLedesma/youtube-summarizer" target="_blank" rel="noopener">GitHub</a> ·
+    <a href="https://www.linkedin.com/in/emmanuel-ledesmam" target="_blank" rel="noopener">LinkedIn</a>
+  </div>
+  <div class="footer-stack">
+    <span class="stack-badge">AWS Bedrock</span>
+    <span class="stack-badge">Lambda</span>
+    <span class="stack-badge">API Gateway</span>
+    <span class="stack-badge">DynamoDB</span>
+    <span class="stack-badge">Terraform</span>
+    <span class="stack-badge">Python 3.12</span>
+  </div>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>
