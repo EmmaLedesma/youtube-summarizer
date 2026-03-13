@@ -15,7 +15,6 @@ terraform {
 provider "aws" {
   region  = var.aws_region
   profile = var.aws_profile
-
   default_tags {
     tags = {
       Project     = var.project_name
@@ -28,29 +27,25 @@ provider "aws" {
 
 # ── DynamoDB ─────────────────────────────────────────────────
 module "dynamodb" {
-  source = "./modules/dynamodb"
-
+  source     = "./modules/dynamodb"
   table_name = "${var.project_name}-${var.environment}-summaries"
 }
 
 # ── Lambda ───────────────────────────────────────────────────
 module "lambda" {
-  source = "./modules/lambda"
-
+  source             = "./modules/lambda"
   function_name      = "${var.project_name}-${var.environment}-summarizer"
   zip_path           = "../backend/summarizer/summarizer.zip"
   dynamodb_table_arn = module.dynamodb.table_arn
-
   environment_variables = {
-    DYNAMODB_TABLE   = "${var.project_name}-${var.environment}-summaries"
-    AWS_REGION_NAME  = var.aws_region
+    DYNAMODB_TABLE  = "${var.project_name}-${var.environment}-summaries"
+    AWS_REGION_NAME = var.aws_region
   }
 }
 
 # ── API Gateway ──────────────────────────────────────────────
 module "api_gateway" {
-  source = "./modules/api-gateway"
-
+  source               = "./modules/api-gateway"
   api_name             = "${var.project_name}-${var.environment}-api"
   lambda_invoke_arn    = module.lambda.invoke_arn
   lambda_function_name = module.lambda.function_name
@@ -58,8 +53,18 @@ module "api_gateway" {
 
 # ── Storage (S3 + CloudFront) ────────────────────────────────
 module "storage" {
-  source = "./modules/storage"
-
+  source       = "./modules/storage"
   project_name = var.project_name
   environment  = var.environment
+}
+
+# ── Monitoring (CloudWatch) ──────────────────────────────────
+module "monitoring" {
+  source               = "./modules/monitoring"
+  project_name         = var.project_name
+  environment          = var.environment
+  aws_region           = var.aws_region
+  lambda_function_name = module.lambda.function_name
+  api_name             = "${var.project_name}-${var.environment}-api"
+  dynamodb_table_name  = "${var.project_name}-${var.environment}-summaries"
 }
